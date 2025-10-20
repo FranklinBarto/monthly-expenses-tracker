@@ -100,10 +100,6 @@ export default function App() {
 
   // PWA Install handling
   useEffect(() => {
-
-    
-    // eslint-disable-next-line
-    if(data.categories.length < 1) setView('plan');
     
     const handler = (e) => {
       e.preventDefault();
