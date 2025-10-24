@@ -137,7 +137,8 @@ export default function App() {
     alert('Settings saved!');
   };
 
-  const currencySymbol = CURRENCIES[data.settings.currency]?.symbol || '$';
+  const currencySymbol = CURRENCIES[data?.settings?.currency]?.symbol || '$';
+
 
   // Add new category
   const addCategory = () => {
@@ -275,8 +276,8 @@ export default function App() {
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Expense Planner</h1>
-              {data.settings.userName && (
-                <p className="text-gray-600 mt-1">Welcome, {data.settings.userName}!</p>
+              {data?.settings?.userName && (
+                <p className="text-gray-600 mt-1">Welcome, {data?.settings?.userName}!</p>
               )}
             </div>
           </div>
