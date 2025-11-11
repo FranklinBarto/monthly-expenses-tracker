@@ -83,6 +83,10 @@ export default function App() {
     userName: ''
   });
 
+  // Expansion states for historical data
+  const [expandedYears, setExpandedYears] = useState({});
+  const [expandedMonths, setExpandedMonths] = useState({});
+
   // Load data from memory on mount
   useEffect(() => {
     const saved = localStorage.getItem('expenseData');
@@ -267,6 +271,109 @@ export default function App() {
     sum + calculateWeeklyForecast(cat), 0);
   const totalMonthlySpent = Object.values(monthTotals).reduce((sum, val) => sum + val, 0);
   const totalWeeklySpent = Object.values(weekTotals).reduce((sum, val) => sum + val, 0);
+
+  // Group expenses by year and month
+  const groupExpensesByYearMonth = () => {
+    const groups = {};
+    
+    data.actualExpenses.forEach(expense => {
+      const date = new Date(expense.date);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      
+      if (!groups[year]) groups[year] = {};
+      if (!groups[year][month]) groups[year][month] = [];
+      
+      groups[year][month].push(expense);
+    });
+    
+    return groups;
+  };
+
+  const expenseGroups = groupExpensesByYearMonth();
+
+  // Get historical performance data
+  const getHistoricalMonths = (count) => {
+    const months = [];
+    const now = new Date();
+    
+    for (let i = 0; i < count; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const expenses = data.actualExpenses.filter(e => {
+        const expDate = new Date(e.date);
+        return expDate.getMonth() === date.getMonth() && 
+               expDate.getFullYear() === date.getFullYear();
+      });
+      
+      const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+      months.push({
+        label: date.toLocaleDateString('default', { month: 'short', year: 'numeric' }),
+        budget: totalMonthlyBudget,
+        spent: total
+      });
+    }
+    
+    return months;
+  };
+
+  const getHistoricalWeeks = (count) => {
+    const weeks = [];
+    const now = new Date();
+    
+    for (let i = 0; i < count; i++) {
+      const endDate = new Date(now.getTime() - (i * 7 * 24 * 60 * 60 * 1000));
+      const startDate = new Date(endDate.getTime() - (7 * 24 * 60 * 60 * 1000));
+      
+      const expenses = data.actualExpenses.filter(e => {
+        const expDate = new Date(e.date);
+        return expDate >= startDate && expDate <= endDate;
+      });
+      
+      const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+      weeks.push({
+        label: `Week ${i === 0 ? '(Current)' : `-${i}`}`,
+        budget: totalWeeklyBudget,
+        spent: total
+      });
+    }
+    
+    return weeks;
+  };
+
+  const getHistoricalDays = (count) => {
+    const days = [];
+    const now = new Date();
+    
+    for (let i = 0; i < count; i++) {
+      const date = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
+      const expenses = data.actualExpenses.filter(e => {
+        const expDate = new Date(e.date);
+        return expDate.toDateString() === date.toDateString();
+      });
+      
+      const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+      const dailyBudget = totalMonthlyBudget / 30;
+      
+      days.push({
+        label: i === 0 ? 'Today' : date.toLocaleDateString('default', { month: 'short', day: 'numeric' }),
+        budget: dailyBudget,
+        spent: total
+      });
+    }
+    
+    return days;
+  };
+
+  const toggleYear = (year) => {
+    setExpandedYears(prev => ({...prev, [year]: !prev[year]}));
+  };
+
+  const toggleMonth = (yearMonth) => {
+    setExpandedMonths(prev => ({...prev, [yearMonth]: !prev[yearMonth]}));
+  };
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -548,31 +655,143 @@ export default function App() {
               )}
             </div>
 
-            {/* Recent Expenses */}
+{/* Expenses by Year/Month */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Recent Expenses</h2>
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Expense History</h2>
               {data.actualExpenses.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No expenses recorded yet.</p>
               ) : (
-                <div className="space-y-2">
-                  {[...data.actualExpenses].reverse().slice(0, 10).map(expense => {
-                    const category = data.categories.find(c => c.id === expense.categoryId);
+                <div className="space-y-3">
+                  {/* Current Month */}
+                  <div className="border-2 border-indigo-300 rounded-lg p-4 bg-indigo-50">
+                    <h3 className="font-bold text-lg text-gray-800 mb-3">
+                      Current Month - {monthNames[new Date().getMonth()]} {new Date().getFullYear()}
+                      <span className="ml-2 text-sm font-normal text-gray-600">
+                        ({monthExpenses.length} expense{monthExpenses.length !== 1 ? 's' : ''})
+                      </span>
+                    </h3>
+                    <div className="space-y-2">
+                      {monthExpenses.length === 0 ? (
+                        <p className="text-gray-500 text-sm">No expenses this month</p>
+                      ) : (
+                        [...monthExpenses].reverse().map(expense => {
+                          const category = data.categories.find(c => c.id === expense.categoryId);
+                          return (
+                            <div key={expense.id} className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center">
+                              <div>
+                                <p className="font-semibold text-gray-800">{category?.name}</p>
+                                <p className="text-sm text-gray-600">{expense.description}</p>
+                                <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <p className="font-bold text-lg text-indigo-600">{currencySymbol}{expense.amount.toFixed(2)}</p>
+                                <button
+                                  onClick={() => deleteExpense(expense.id)}
+                                  className="text-red-500 hover:text-red-700 transition-colors"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Previous Months/Years */}
+                  {Object.keys(expenseGroups).sort((a, b) => b - a).map(year => {
+                    const currentYear = new Date().getFullYear();
+                    const currentMonth = new Date().getMonth();
+                    
+                    // Filter out current month from the groups
+                    const monthsInYear = Object.keys(expenseGroups[year])
+                      .filter(month => !(year === currentYear && month === currentMonth))
+                      .sort((a, b) => b - a);
+                    
+                    if (monthsInYear.length === 0) return null;
+                    
+                    const yearTotal = monthsInYear.reduce((sum, month) => {
+                      return sum + expenseGroups[year][month].reduce((s, e) => s + e.amount, 0);
+                    }, 0);
+                    
                     return (
-                      <div key={expense.id} className="border border-gray-200 rounded-lg p-3 flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-800">{category?.name}</p>
-                          <p className="text-sm text-gray-600">{expense.description}</p>
-                          <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <p className="font-bold text-lg text-indigo-600">{currencySymbol}{expense.amount.toFixed(2)}</p>
-                          <button
-                            onClick={() => deleteExpense(expense.id)}
-                            className="text-red-500 hover:text-red-700 transition-colors"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
+                      <div key={year} className="border border-gray-300 rounded-lg">
+                        <button
+                          onClick={() => toggleYear(year)}
+                          className="w-full p-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="text-left">
+                            <h3 className="font-bold text-lg text-gray-800">
+                              {year}
+                              <span className="ml-2 text-sm font-normal text-gray-600">
+                                ({monthsInYear.length} month{monthsInYear.length !== 1 ? 's' : ''})
+                              </span>
+                            </h3>
+                            <p className="text-sm text-gray-600">Total: {currencySymbol}{yearTotal.toFixed(2)}</p>
+                          </div>
+                          <div className="text-2xl text-gray-400">
+                            {expandedYears[year] ? '−' : '+'}
+                          </div>
+                        </button>
+                        
+                        {expandedYears[year] && (
+                          <div className="p-4 pt-0 space-y-2">
+                            {monthsInYear.map(month => {
+                              const expenses = expenseGroups[year][month];
+                              const monthTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
+                              const yearMonthKey = `${year}-${month}`;
+                              
+                              return (
+                                <div key={month} className="border border-gray-200 rounded-lg">
+                                  <button
+                                    onClick={() => toggleMonth(yearMonthKey)}
+                                    className="w-full p-3 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                                  >
+                                    <div className="text-left">
+                                      <p className="font-semibold text-gray-800">
+                                        {monthNames[month]}
+                                        <span className="ml-2 text-sm font-normal text-gray-600">
+                                          ({expenses.length} expense{expenses.length !== 1 ? 's' : ''})
+                                        </span>
+                                      </p>
+                                      <p className="text-sm text-gray-600">Total: {currencySymbol}{monthTotal.toFixed(2)}</p>
+                                    </div>
+                                    <div className="text-xl text-gray-400">
+                                      {expandedMonths[yearMonthKey] ? '−' : '+'}
+                                    </div>
+                                  </button>
+                                  
+                                  {expandedMonths[yearMonthKey] && (
+                                    <div className="p-3 pt-0 space-y-2">
+                                      {[...expenses].reverse().map(expense => {
+                                        const category = data.categories.find(c => c.id === expense.categoryId);
+                                        return (
+                                          <div key={expense.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
+                                            <div>
+                                              <p className="font-semibold text-gray-800">{category?.name}</p>
+                                              <p className="text-sm text-gray-600">{expense.description}</p>
+                                              <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <p className="font-bold text-lg text-indigo-600">{currencySymbol}{expense.amount.toFixed(2)}</p>
+                                              <button
+                                                onClick={() => deleteExpense(expense.id)}
+                                                className="text-red-500 hover:text-red-700 transition-colors"
+                                              >
+                                                <Trash2 size={18} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -711,6 +930,107 @@ export default function App() {
                   })}
                 </div>
               )}
+            </div>
+            {/* Performance History - Last 3 Months */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Monthly Performance (Last 3 Months)</h2>
+              <div className="space-y-4">
+                {getHistoricalMonths(3).map((month, idx) => {
+                  const percentage = month.budget > 0 ? (month.spent / month.budget) * 100 : 0;
+                  const isOverBudget = month.spent > month.budget;
+                  
+                  return (
+                    <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold text-gray-800">{month.label}</h3>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">
+                            {currencySymbol}{month.spent.toFixed(2)} / {currencySymbol}{month.budget.toFixed(2)}
+                          </p>
+                          <p className={`text-xs font-semibold ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                            {isOverBudget ? '+' : ''}{currencySymbol}{(month.spent - month.budget).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className={`h-3 rounded-full ${isOverBudget ? 'bg-red-500' : 'bg-green-500'}`}
+                          style={{width: `${Math.min(percentage, 100)}%`}}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{percentage.toFixed(1)}% of budget</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Performance History - Last 3 Weeks */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Weekly Performance (Last 3 Weeks)</h2>
+              <div className="space-y-4">
+                {getHistoricalWeeks(3).map((week, idx) => {
+                  const percentage = week.budget > 0 ? (week.spent / week.budget) * 100 : 0;
+                  const isOverBudget = week.spent > week.budget;
+                  
+                  return (
+                    <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold text-gray-800">{week.label}</h3>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">
+                            {currencySymbol}{week.spent.toFixed(2)} / {currencySymbol}{week.budget.toFixed(2)}
+                          </p>
+                          <p className={`text-xs font-semibold ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                            {isOverBudget ? '+' : ''}{currencySymbol}{(week.spent - week.budget).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className={`h-3 rounded-full ${isOverBudget ? 'bg-red-500' : 'bg-blue-500'}`}
+                          style={{width: `${Math.min(percentage, 100)}%`}}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{percentage.toFixed(1)}% of budget</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Performance History - Last 3 Days */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Daily Performance (Last 3 Days)</h2>
+              <div className="space-y-4">
+                {getHistoricalDays(3).map((day, idx) => {
+                  const percentage = day.budget > 0 ? (day.spent / day.budget) * 100 : 0;
+                  const isOverBudget = day.spent > day.budget;
+                  
+                  return (
+                    <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold text-gray-800">{day.label}</h3>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">
+                            {currencySymbol}{day.spent.toFixed(2)} / {currencySymbol}{day.budget.toFixed(2)}
+                          </p>
+                          <p className={`text-xs font-semibold ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                            {isOverBudget ? '+' : ''}{currencySymbol}{(day.spent - day.budget).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div 
+                          className={`h-3 rounded-full ${isOverBudget ? 'bg-red-500' : 'bg-indigo-500'}`}
+                          style={{width: `${Math.min(percentage, 100)}%`}}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{percentage.toFixed(1)}% of daily budget</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
