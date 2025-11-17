@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PlusCircle, TrendingUp, Calendar, DollarSign, Trash2, Settings, Download, Database, Upload, Shield, HardDrive } from 'lucide-react';
 import Dexie from 'dexie';
 
@@ -105,79 +105,8 @@ export default function App() {
   const [expandedYears, setExpandedYears] = useState({});
   const [expandedMonths, setExpandedMonths] = useState({});
 
-  // Load data from IndexedDB on mount
-  useEffect(() => {
-    loadFromIndexedDB();
-  }, []);
-
-  const loadFromIndexedDB = async () => {
-    try {
-      setIsLoading(true);
-      const categories = await db.categories.toArray();
-      const expenses = await db.expenses.toArray();
-      const settingsData = await db.settings.get('appSettings');
-      
-      const loadedData = {
-        categories: categories || [],
-        actualExpenses: expenses || [],
-        settings: settingsData?.value || INITIAL_DATA.settings
-      };
-      
-      setData(loadedData);
-      setSettingsForm(loadedData.settings);
-      
-      // Check if backup is needed
-      if (loadedData.settings.autoBackup) {
-        checkAndPerformBackup(loadedData);
-      }
-    } catch (error) {
-      console.error('Error loading from IndexedDB:', error);
-      setBackupStatus('Error loading data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Save data to IndexedDB whenever it changes
-  useEffect(() => {
-    if (!isLoading) {
-      saveToIndexedDB();
-    }
-  }, [data]);
-
-  const saveToIndexedDB = async () => {
-    try {
-      await db.categories.clear();
-      await db.categories.bulkAdd(data.categories);
-      
-      await db.expenses.clear();
-      await db.expenses.bulkAdd(data.actualExpenses);
-      
-      await db.settings.put({ key: 'appSettings', value: data.settings });
-      
-      // Auto-backup if enabled
-      if (data.settings.autoBackup) {
-        checkAndPerformBackup(data);
-      }
-    } catch (error) {
-      console.error('Error saving to IndexedDB:', error);
-      setBackupStatus('Error saving data');
-    }
-  };
-
-  // Check if backup is needed (weekly or on significant change)
-  const checkAndPerformBackup = async (currentData) => {
-    const lastBackup = currentData.settings.lastBackup;
-    const now = Date.now();
-    const weekInMs = 7 * 24 * 60 * 60 * 1000;
-    
-    if (!lastBackup || (now - lastBackup) > weekInMs) {
-      await performLocalBackup(currentData);
-    }
-  };
-
-  // Perform local backup using File System Access API
-  const performLocalBackup = async (currentData) => {
+   // Perform local backup using File System Access API
+  const performLocalBackup = useCallback(async (currentData) => {
     try {
       const backupData = {
         version: 1,
@@ -208,7 +137,80 @@ export default function App() {
       console.error('Backup error:', error);
       setBackupStatus('Backup failed: ' + error.message);
     }
-  };
+  }, [setData]);
+
+  // Check if backup is needed (weekly or on significant change)
+  const checkAndPerformBackup = useCallback(async (currentData) => {
+    const lastBackup = currentData.settings.lastBackup;
+    const now = Date.now();
+    const weekInMs = 7 * 24 * 60 * 60 * 1000;
+    
+    if (!lastBackup || (now - lastBackup) > weekInMs) {
+      await performLocalBackup(currentData);
+    }
+  }, [performLocalBackup]);
+
+  const loadFromIndexedDB = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const categories = await db.categories.toArray();
+      const expenses = await db.expenses.toArray();
+      const settingsData = await db.settings.get('appSettings');
+      
+      const loadedData = {
+        categories: categories || [],
+        actualExpenses: expenses || [],
+        settings: settingsData?.value || INITIAL_DATA.settings
+      };
+      
+      setData(loadedData);
+      setSettingsForm(loadedData.settings);
+      
+      // Check if backup is needed
+      if (loadedData.settings.autoBackup) {
+        checkAndPerformBackup(loadedData);
+      }
+    } catch (error) {
+      console.error('Error loading from IndexedDB:', error);
+      setBackupStatus('Error loading data');
+    } finally {
+      setIsLoading(false);
+    }
+  },[checkAndPerformBackup]);
+
+  // Load data from IndexedDB on mount
+  useEffect(() => {
+    loadFromIndexedDB();
+  }, [loadFromIndexedDB]);
+
+
+  const saveToIndexedDB = useCallback(async () => {
+    try {
+      // Use the 'data' state variable here
+      await db.categories.clear();
+      await db.categories.bulkAdd(data.categories);
+      
+      await db.expenses.clear();
+      await db.expenses.bulkAdd(data.actualExpenses);
+      
+      await db.settings.put({ key: 'appSettings', value: data.settings });
+      
+      // Auto-backup if enabled
+      if (data.settings.autoBackup) {
+        checkAndPerformBackup(data);
+      }
+    } catch (error) {
+      console.error('Error saving to IndexedDB:', error);
+      setBackupStatus('Error saving data');
+    }
+  }, [data, checkAndPerformBackup]); 
+
+  // Save data to IndexedDB whenever it changes
+  useEffect(() => {
+    if (!isLoading) {
+      saveToIndexedDB();
+    }
+  }, [data, isLoading, saveToIndexedDB]);
 
   // Manual backup to file
   const manualBackupToFile = async () => {
