@@ -70,71 +70,52 @@ const INITIAL_DATA = {
   }
 };
 
+// Reusable Inline Edit Component
 const InlineEdit = ({ value, type = 'text', onSave, options = [], prefix = '', className = '' }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [tempValue, setTempValue] = useState(value);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [tempValue, setTempValue] = React.useState(value);
 
-  useEffect(() => {
-    setTempValue(value);
-  }, [value]);
+  React.useEffect(() => { setTempValue(value); }, [value]);
+
+  const handleSave = () => {
+    if (tempValue !== value) onSave(tempValue); // Loose equality check for numbers/strings
+    setIsEditing(false);
+  };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') {
       setTempValue(value);
       setIsEditing(false);
     }
   };
 
-  const handleSave = () => {
-    if (tempValue !== value) {
-      onSave(tempValue);
-    }
-    setIsEditing(false);
-  };
-
   if (isEditing) {
     if (type === 'select') {
       return (
-        <select
-          autoFocus
-          value={tempValue}
-          onChange={(e) => setTempValue(e.target.value)}
-          onBlur={handleSave}
-          className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}
-        >
-          {options.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
+        <select autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onBlur={handleSave}
+          className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}>
+          {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
       );
     }
-
     return (
-      <input
-        autoFocus
-        type={type}
-        value={tempValue}
-        onChange={(e) => setTempValue(e.target.value)}
-        onBlur={handleSave}
-        onKeyDown={handleKeyDown}
-        className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 w-full ${className}`}
-      />
+      <input autoFocus type={type} value={tempValue} onChange={e => setTempValue(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown}
+        className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 w-full ${className}`} />
     );
   }
 
-  // Read-only view
+  // Read-only View
+  let displayValue = value;
+  if (type === 'select') displayValue = options.find(o => o.value === value)?.label || 'Unknown';
+  if (type === 'number' && !isNaN(value)) displayValue = parseFloat(value).toFixed(2);
+  if (type === 'date') displayValue = new Date(value).toLocaleDateString();
+
   return (
-    <div
-      onClick={() => setIsEditing(true)}
-      className={`cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors border border-transparent hover:border-gray-200 ${className}`}
-      title="Click to edit"
-    >
-      {type === 'select'
-        ? options.find(o => o.value === value)?.label || value
-        : `${prefix}${type === 'number' && !isNaN(value) ? parseFloat(value).toFixed(2) : value}`
-      }
+    <div onClick={() => setIsEditing(true)}
+      className={`cursor-pointer hover:bg-gray-100 hover:text-indigo-600 px-1 rounded transition-colors border border-transparent hover:border-gray-200 ${className}`}
+      title="Click to edit">
+      {prefix}{displayValue || <span className="text-gray-400 italic">Empty</span>}
     </div>
   );
 };
@@ -1308,39 +1289,43 @@ export default function App() {
                 </div>
               )}
 
-
+              {/* Expenses by Year/Month */}
               {/* Expenses by Year/Month */}
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Expense History</h2>
+
                 {data.actualExpenses.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">No expenses recorded yet.</p>
                 ) : (
-                  <div className="space-y-3">
-                    {/* Current Month */}
-                    <div className="border-2 border-indigo-300 rounded-lg p-4 bg-indigo-50">
-                      <h3 className="font-bold text-lg text-gray-800 mb-3">
-                        Current Month - {monthNames[new Date().getMonth()]} {new Date().getFullYear()}
-                        <span className="ml-2 text-sm font-normal text-gray-600">
-                          ({monthExpenses.length} expense{monthExpenses.length !== 1 ? 's' : ''})
-                        </span>
-                      </h3>
-                      <div className="space-y-2">
+                  <div className="space-y-4">
+
+                    {/* 1. CURRENT MONTH (Always Open) */}
+                    <div className="border-2 border-indigo-100 rounded-lg overflow-hidden bg-white">
+                      <div className="bg-indigo-50 p-4 border-b border-indigo-100">
+                        <h3 className="font-bold text-lg text-indigo-900 flex justify-between items-center">
+                          <span>Current Month ({monthNames[new Date().getMonth()]})</span>
+                          <span className="text-sm font-normal text-indigo-700">
+                            Total: {formatCurrency(Object.values(monthTotals).reduce((a, b) => a + b, 0))}
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="p-4 space-y-2">
                         {monthExpenses.length === 0 ? (
-                          <p className="text-gray-500 text-sm">No expenses this month</p>
+                          <p className="text-gray-500 italic text-sm">No expenses this month yet.</p>
                         ) : (
                           monthExpenses
                             .sort((a, b) => new Date(b.date) - new Date(a.date))
                             .map(expense => (
-                              <div key={expense.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded hover:bg-gray-50">
-                                <div className="flex-1">
+                              <div key={expense.id} className="bg-white border border-gray-100 rounded-lg p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex-1 w-full sm:w-auto">
                                   <div className="flex items-center gap-2 mb-1">
-                                    {/* Editable Category Selection */}
+                                    {/* Editable Category */}
                                     <InlineEdit
                                       type="select"
                                       value={expense.categoryId}
                                       options={data.categories.map(c => ({ value: c.id, label: c.name }))}
                                       onSave={(val) => updateExpense(expense.id, 'categoryId', val)}
-                                      className="font-bold text-gray-800 text-sm"
+                                      className="font-semibold text-gray-800"
                                     />
                                     <span className="text-gray-300">|</span>
                                     {/* Editable Date */}
@@ -1351,29 +1336,23 @@ export default function App() {
                                       className="text-xs text-gray-500"
                                     />
                                   </div>
-
                                   {/* Editable Description */}
                                   <InlineEdit
-                                    value={expense.description || 'No description'}
+                                    value={expense.description}
                                     onSave={(val) => updateExpense(expense.id, 'description', val)}
-                                    className="text-sm text-gray-600 italic"
+                                    className="text-sm text-gray-600 block w-full"
                                   />
                                 </div>
-
-                                <div className="text-right flex items-center gap-4">
+                                <div className="flex items-center gap-3 mt-2 sm:mt-0 w-full sm:w-auto justify-end">
                                   {/* Editable Amount */}
                                   <InlineEdit
                                     type="number"
                                     prefix={currencySymbol}
                                     value={expense.amount}
                                     onSave={(val) => updateExpense(expense.id, 'amount', val)}
-                                    className="font-bold text-indigo-600"
+                                    className="font-bold text-lg text-indigo-600 text-right"
                                   />
-
-                                  <button
-                                    onClick={() => deleteExpense(expense.id)}
-                                    className="text-gray-400 hover:text-red-500 transition-colors"
-                                  >
+                                  <button onClick={() => deleteExpense(expense.id)} className="text-gray-300 hover:text-red-500 transition-colors">
                                     <Trash2 size={16} />
                                   </button>
                                 </div>
@@ -1383,14 +1362,14 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Previous Months/Years */}
+                    {/* 2. HISTORICAL DATA (Collapsible) */}
                     {Object.keys(expenseGroups).sort((a, b) => b - a).map(year => {
                       const currentYear = new Date().getFullYear();
-                      const currentMonth = new Date().getMonth();
+                      const currentMonthIdx = new Date().getMonth();
 
-                      // Filter out current month from the groups
+                      // Filter out current month from the groups so it doesn't show twice
                       const monthsInYear = Object.keys(expenseGroups[year])
-                        .filter(month => !(year === currentYear && month === currentMonth))
+                        .filter(month => !(Number(year) === currentYear && Number(month) === currentMonthIdx))
                         .sort((a, b) => b - a);
 
                       if (monthsInYear.length === 0) return null;
@@ -1400,75 +1379,91 @@ export default function App() {
                       }, 0);
 
                       return (
-                        <div key={year} className="border border-gray-300 rounded-lg">
+                        <div key={year} className="border border-gray-200 rounded-lg">
                           <button
                             onClick={() => toggleYear(year)}
-                            className="w-full p-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                            className="w-full p-4 flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors rounded-lg"
                           >
                             <div className="text-left">
-                              <h3 className="font-bold text-lg text-gray-800">
-                                {year}
-                                <span className="ml-2 text-sm font-normal text-gray-600">
-                                  ({monthsInYear.length} month{monthsInYear.length !== 1 ? 's' : ''})
-                                </span>
+                              <h3 className="font-bold text-gray-700">
+                                {year} <span className="text-xs font-normal text-gray-500">({monthsInYear.length} months)</span>
                               </h3>
-                              <p className="text-sm text-gray-600">Total: {currencySymbol}{yearTotal.toFixed(2)}</p>
                             </div>
-                            <div className="text-2xl text-gray-400">
-                              {expandedYears[year] ? '−' : '+'}
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm font-medium text-gray-600">Total: {currencySymbol}{yearTotal.toFixed(2)}</span>
+                              <span className="text-gray-400">{expandedYears[year] ? '−' : '+'}</span>
                             </div>
                           </button>
 
                           {expandedYears[year] && (
-                            <div className="p-4 pt-0 space-y-2">
+                            <div className="p-4 space-y-3 bg-white border-t border-gray-200">
                               {monthsInYear.map(month => {
                                 const expenses = expenseGroups[year][month];
                                 const monthTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
                                 const yearMonthKey = `${year}-${month}`;
 
                                 return (
-                                  <div key={month} className="border border-gray-200 rounded-lg">
+                                  <div key={month} className="border border-gray-100 rounded-lg overflow-hidden">
                                     <button
                                       onClick={() => toggleMonth(yearMonthKey)}
-                                      className="w-full p-3 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                                      className="w-full p-3 flex justify-between items-center hover:bg-gray-50 transition-colors bg-white"
                                     >
                                       <div className="text-left">
-                                        <p className="font-semibold text-gray-800">
-                                          {monthNames[month]}
-                                          <span className="ml-2 text-sm font-normal text-gray-600">
-                                            ({expenses.length} expense{expenses.length !== 1 ? 's' : ''})
-                                          </span>
+                                        <p className="font-semibold text-gray-700">
+                                          {monthNames[month]} <span className="text-xs font-normal text-gray-500">({expenses.length} expenses)</span>
                                         </p>
-                                        <p className="text-sm text-gray-600">Total: {currencySymbol}{monthTotal.toFixed(2)}</p>
                                       </div>
-                                      <div className="text-xl text-gray-400">
-                                        {expandedMonths[yearMonthKey] ? '−' : '+'}
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm text-gray-500">{currencySymbol}{monthTotal.toFixed(2)}</span>
+                                        <span className="text-gray-400 text-sm">{expandedMonths[yearMonthKey] ? '▼' : '▶'}</span>
                                       </div>
                                     </button>
 
                                     {expandedMonths[yearMonthKey] && (
-                                      <div className="p-3 pt-0 space-y-2">
-                                        {[...expenses].reverse().map(expense => {
-                                          const category = data.categories.find(c => c.id === expense.categoryId);
-                                          return (
-                                            <div key={expense.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex justify-between items-center">
-                                              <div>
-                                                <p className="font-semibold text-gray-800">{category?.name}</p>
-                                                <p className="text-sm text-gray-600">{expense.description}</p>
-                                                <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</p>
+                                      <div className="p-3 bg-gray-50 space-y-2 border-t border-gray-100">
+                                        {[...expenses].reverse().map(expense => (
+                                          <div key={expense.id} className="bg-white border border-gray-200 rounded p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                            <div className="flex-1 w-full">
+                                              <div className="flex items-center gap-2">
+                                                {/* Editable Category */}
+                                                <InlineEdit
+                                                  type="select"
+                                                  value={expense.categoryId}
+                                                  options={data.categories.map(c => ({ value: c.id, label: c.name }))}
+                                                  onSave={(val) => updateExpense(expense.id, 'categoryId', val)}
+                                                  className="font-medium text-gray-800 text-sm"
+                                                />
+                                                <span className="text-gray-300">|</span>
+                                                {/* Editable Date */}
+                                                <InlineEdit
+                                                  type="date"
+                                                  value={expense.date}
+                                                  onSave={(val) => updateExpense(expense.id, 'date', val)}
+                                                  className="text-xs text-gray-400"
+                                                />
                                               </div>
-                                              <div className="flex items-center gap-3">
-                                                <p className="font-bold text-lg text-indigo-600">{currencySymbol}{expense.amount.toFixed(2)}</p>
-                                                <button
-                                                  onClick={() => deleteExpense(expense.id)}
-                                                  className="text-red-500 hover:text-red-700 transition-colors"
-                                                >
-                                                  <Trash2 size={18} />
-                                                </button>
-                                              </div>
+                                              {/* Editable Description */}
+                                              <InlineEdit
+                                                value={expense.description}
+                                                onSave={(val) => updateExpense(expense.id, 'description', val)}
+                                                className="text-xs text-gray-500 mt-1 block"
+                                              />
                                             </div>
-                                          );
-                                        })}
+                                            <div className="flex items-center gap-3 mt-2 sm:mt-0 w-full sm:w-auto justify-end">
+                                              {/* Editable Amount */}
+                                              <InlineEdit
+                                                type="number"
+                                                prefix={currencySymbol}
+                                                value={expense.amount}
+                                                onSave={(val) => updateExpense(expense.id, 'amount', val)}
+                                                className="font-bold text-indigo-600"
+                                              />
+                                              <button onClick={() => deleteExpense(expense.id)} className="text-gray-300 hover:text-red-500">
+                                                <Trash2 size={14} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
                                       </div>
                                     )}
                                   </div>
