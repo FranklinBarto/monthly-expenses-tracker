@@ -105,6 +105,12 @@ export default function App() {
   const [expandedYears, setExpandedYears] = useState({});
   const [expandedMonths, setExpandedMonths] = useState({});
 
+  const [expandedCategories, setExpandedCategories] = useState({});
+
+  const toggleCategory = (categoryId) => {
+    setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+  };
+
   // Perform local backup using File System Access API
   const performLocalBackup = useCallback(async (currentData) => {
     try {
@@ -1333,6 +1339,127 @@ export default function App() {
           {/* Summary View */}
           {view === 'summary' && (
             <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <TrendingUp size={24} />
+                  Category Performance
+                </h2>
+                {data.categories.length === 0 ? (
+                  <p className="text-gray-500 italic text-center py-8">No categories to display. Add budget categories first.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {data.categories.map(category => {
+                      const monthlyForecast = calculateMonthlyForecast(category);
+                      const weeklyForecast = calculateWeeklyForecast(category);
+                      const monthSpent = monthTotals[category.id] || 0;
+                      const weekSpent = weekTotals[category.id] || 0;
+                      const monthRemaining = monthlyForecast - monthSpent;
+                      const monthPercentage = monthlyForecast > 0 ? (monthSpent / monthlyForecast) * 100 : 0;
+                      const isMonthOver = monthSpent > monthlyForecast;
+                      const isExpanded = expandedCategories[category.id];
+
+                      return (
+                        <div key={category.id} className="border bg-white border-gray-300 rounded-lg overflow-hidden">
+                          {/* Category Header - Always Visible */}
+                          <button
+                            onClick={() => toggleCategory(category.id)}
+                            className="w-full p-4 flex justify-between items-center hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="text-left flex-1">
+                              <p className="font-bold text-lg text-gray-800">{category.name}</p>
+                              <p className="text-sm text-gray-600">
+                                Target: {formatCurrency(category.target)} / {category.frequency}
+                              </p>
+                            </div>
+                            <div className="text-right mr-4">
+                              <p className={`font-bold text-xl ${isMonthOver ? 'text-red-600' : 'text-green-600'}`}>
+                                {formatCurrency(monthSpent)}
+                              </p>
+                              <p className="text-xs text-gray-500">this month</p>
+                            </div>
+                            <div className="text-2xl text-gray-400">
+                              {isExpanded ? '−' : '+'}
+                            </div>
+                          </button>
+
+                          {/* Expanded Details */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 space-y-4 bg-gray-50">
+                              {/* Current Month Details */}
+                              <div className="bg-white rounded-lg p-4 border-l-4 border-green-500">
+                                <h4 className="font-semibold text-gray-700 mb-3">
+                                  Current Month - {monthNames[new Date().getMonth()]}
+                                </h4>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Monthly Budget:</span>
+                                    <span className="font-semibold">{formatCurrency(monthlyForecast)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Spent:</span>
+                                    <span className={`font-semibold ${isMonthOver ? 'text-red-600' : 'text-green-600'}`}>
+                                      {formatCurrency(monthSpent)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">
+                                      {isMonthOver ? 'Over Budget:' : 'Remaining:'}
+                                    </span>
+                                    <span className={`font-semibold ${isMonthOver ? 'text-red-600' : 'text-green-600'}`}>
+                                      {formatCurrency(Math.abs(monthRemaining))}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                                    <div
+                                      className={`h-3 rounded-full transition-all ${isMonthOver ? 'bg-red-500' : 'bg-green-500'}`}
+                                      style={{ width: `${Math.min(monthPercentage, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                  <p className="text-xs text-gray-600 text-center">{monthPercentage.toFixed(1)}% used</p>
+                                </div>
+                              </div>
+
+                              {/* Last 7 Days Details */}
+                              <div className="bg-white rounded-lg p-4 border-l-4 border-blue-500">
+                                <h4 className="font-semibold text-gray-700 mb-3">Last 7 Days</h4>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Weekly Budget:</span>
+                                    <span className="font-semibold">{formatCurrency(weeklyForecast)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Spent:</span>
+                                    <span className={`font-semibold ${weekSpent > weeklyForecast ? 'text-red-600' : 'text-blue-600'}`}>
+                                      {formatCurrency(weekSpent)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">
+                                      {weekSpent > weeklyForecast ? 'Over Budget:' : 'Remaining:'}
+                                    </span>
+                                    <span className={`font-semibold ${weekSpent > weeklyForecast ? 'text-red-600' : 'text-blue-600'}`}>
+                                      {formatCurrency(Math.abs(weeklyForecast - weekSpent))}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                                    <div
+                                      className={`h-3 rounded-full transition-all ${weekSpent > weeklyForecast ? 'bg-red-500' : 'bg-blue-500'}`}
+                                      style={{ width: `${Math.min((weekSpent / weeklyForecast) * 100, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                  <p className="text-xs text-gray-600 text-center">
+                                    {weeklyForecast > 0 ? ((weekSpent / weeklyForecast) * 100).toFixed(1) : 0}% used
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                   <TrendingUp size={24} />
