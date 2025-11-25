@@ -70,6 +70,75 @@ const INITIAL_DATA = {
   }
 };
 
+const InlineEdit = ({ value, type = 'text', onSave, options = [], prefix = '', className = '' }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+
+  useEffect(() => {
+    setTempValue(value);
+  }, [value]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (tempValue !== value) {
+      onSave(tempValue);
+    }
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    if (type === 'select') {
+      return (
+        <select
+          autoFocus
+          value={tempValue}
+          onChange={(e) => setTempValue(e.target.value)}
+          onBlur={handleSave}
+          className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 ${className}`}
+        >
+          {options.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <input
+        autoFocus
+        type={type}
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={`px-2 py-1 border rounded bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500 w-full ${className}`}
+      />
+    );
+  }
+
+  // Read-only view
+  return (
+    <div
+      onClick={() => setIsEditing(true)}
+      className={`cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors border border-transparent hover:border-gray-200 ${className}`}
+      title="Click to edit"
+    >
+      {type === 'select'
+        ? options.find(o => o.value === value)?.label || value
+        : `${prefix}${type === 'number' && !isNaN(value) ? parseFloat(value).toFixed(2) : value}`
+      }
+    </div>
+  );
+};
+
 export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [view, setView] = useState('track');
@@ -455,6 +524,26 @@ export default function App() {
     setData(prev => ({
       ...prev,
       actualExpenses: prev.actualExpenses.filter(e => e.id !== id)
+    }));
+  };
+
+  // Update Category (for Inline Editing)
+  const updateCategory = (id, field, value) => {
+    setData(prev => ({
+      ...prev,
+      categories: prev.categories.map(cat =>
+        cat.id === id ? { ...cat, [field]: field === 'target' ? parseFloat(value) : value } : cat
+      )
+    }));
+  };
+
+  // Update Expense (for Inline Editing)
+  const updateExpense = (id, field, value) => {
+    setData(prev => ({
+      ...prev,
+      actualExpenses: prev.actualExpenses.map(exp =>
+        exp.id === id ? { ...exp, [field]: field === 'amount' ? parseFloat(value) : value } : exp
+      )
     }));
   };
 
@@ -1083,23 +1172,53 @@ export default function App() {
                       const isOver = spent > monthlyForecast;
 
                       return (
-                        <li key={category.id} className={`p-4 rounded-lg border-l-4 ${isOver ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-indigo-400'} flex justify-between items-center transition-shadow hover:shadow-md`}>
-                          <div>
-                            <p className="font-semibold text-gray-800">{category.name}</p>
-                            <p className="text-sm text-gray-600 mt-1">
-                              Target: {formatCurrency(category.target)} / {category.frequency}
-                            </p>
+                        <li key={category.id} className={`p-4 rounded-lg border-l-4 ${isOver ? 'bg-red-50 border-red-400' : 'bg-gray-50 border-indigo-400'} flex flex-col sm:flex-row justify-between items-start sm:items-center transition-shadow hover:shadow-md gap-4`}>
+                          <div className="flex-1 w-full">
+                            <div className="font-semibold text-gray-800 flex items-center gap-2">
+                              {/* Editable Name */}
+                              <InlineEdit
+                                value={category.name}
+                                onSave={(val) => updateCategory(category.id, 'name', val)}
+                                className="font-bold text-lg"
+                              />
+                            </div>
+
+                            <div className="text-sm text-gray-600 mt-1 flex items-center flex-wrap gap-2">
+                              <span>Target:</span>
+                              {/* Editable Target Amount */}
+                              <InlineEdit
+                                type="number"
+                                prefix={currencySymbol}
+                                value={category.target}
+                                onSave={(val) => updateCategory(category.id, 'target', val)}
+                                className="font-medium"
+                              />
+                              <span>per</span>
+                              {/* Editable Frequency */}
+                              <InlineEdit
+                                type="select"
+                                value={category.frequency}
+                                options={[
+                                  { value: 'daily', label: 'Day' },
+                                  { value: 'weekly', label: 'Week' },
+                                  { value: 'monthly', label: 'Month' }
+                                ]}
+                                onSave={(val) => updateCategory(category.id, 'frequency', val)}
+                              />
+                            </div>
+
                             <div className="text-xs text-gray-500 mt-1">
                               Monthly Est: {formatCurrency(monthlyForecast)} | Weekly Est: {formatCurrency(weeklyForecast)}
                             </div>
                           </div>
-                          <div className="text-right">
+
+                          <div className="text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between items-center sm:items-end">
                             <p className={`font-bold ${isOver ? 'text-red-600' : 'text-green-600'}`}>
-                              {formatCurrency(spent)} Spent (Current Month)
+                              {formatCurrency(spent)} Spent
                             </p>
                             <button
                               onClick={() => deleteCategory(category.id)}
-                              className="text-red-500 hover:text-red-700 transition-colors mt-1"
+                              className="text-red-500 hover:text-red-700 transition-colors mt-1 p-2"
                               title="Delete Category"
                             >
                               <Trash2 size={18} />
@@ -1209,27 +1328,57 @@ export default function App() {
                         {monthExpenses.length === 0 ? (
                           <p className="text-gray-500 text-sm">No expenses this month</p>
                         ) : (
-                          [...monthExpenses].reverse().map(expense => {
-                            const category = data.categories.find(c => c.id === expense.categoryId);
-                            return (
-                              <div key={expense.id} className="bg-white border border-gray-200 rounded-lg p-3 flex justify-between items-center">
-                                <div>
-                                  <p className="font-semibold text-gray-800">{category?.name}</p>
-                                  <p className="text-sm text-gray-600">{expense.description}</p>
-                                  <p className="text-xs text-gray-500">{new Date(expense.date).toLocaleDateString()}</p>
+                          monthExpenses
+                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                            .map(expense => (
+                              <div key={expense.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded hover:bg-gray-50">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    {/* Editable Category Selection */}
+                                    <InlineEdit
+                                      type="select"
+                                      value={expense.categoryId}
+                                      options={data.categories.map(c => ({ value: c.id, label: c.name }))}
+                                      onSave={(val) => updateExpense(expense.id, 'categoryId', val)}
+                                      className="font-bold text-gray-800 text-sm"
+                                    />
+                                    <span className="text-gray-300">|</span>
+                                    {/* Editable Date */}
+                                    <InlineEdit
+                                      type="date"
+                                      value={expense.date}
+                                      onSave={(val) => updateExpense(expense.id, 'date', val)}
+                                      className="text-xs text-gray-500"
+                                    />
+                                  </div>
+
+                                  {/* Editable Description */}
+                                  <InlineEdit
+                                    value={expense.description || 'No description'}
+                                    onSave={(val) => updateExpense(expense.id, 'description', val)}
+                                    className="text-sm text-gray-600 italic"
+                                  />
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <p className="font-bold text-lg text-indigo-600">{currencySymbol}{expense.amount.toFixed(2)}</p>
+
+                                <div className="text-right flex items-center gap-4">
+                                  {/* Editable Amount */}
+                                  <InlineEdit
+                                    type="number"
+                                    prefix={currencySymbol}
+                                    value={expense.amount}
+                                    onSave={(val) => updateExpense(expense.id, 'amount', val)}
+                                    className="font-bold text-indigo-600"
+                                  />
+
                                   <button
                                     onClick={() => deleteExpense(expense.id)}
-                                    className="text-red-500 hover:text-red-700 transition-colors"
+                                    className="text-gray-400 hover:text-red-500 transition-colors"
                                   >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={16} />
                                   </button>
                                 </div>
                               </div>
-                            );
-                          })
+                            ))
                         )}
                       </div>
                     </div>
